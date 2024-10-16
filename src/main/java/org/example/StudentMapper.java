@@ -22,9 +22,7 @@ public class StudentMapper {
   }
 
 
-  public static Student getStudentDocument(Document document) {
-    return modelMapper.map(document, Student.class);
-  }
+
 
   public static Document getDocumentFromStudent(Student student) {
     return new Document()
@@ -32,7 +30,7 @@ public class StudentMapper {
         .append("lastName", student.getLastName())
         .append("studentId", student.getStudentId())
         .append("group_id", student.getGroupId())
-        .append("_id", student.get_id());
+        .append("_id", student.getId());
   }
 
 

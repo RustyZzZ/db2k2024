@@ -4,6 +4,7 @@ import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.or;
 
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Projections;
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -20,8 +21,10 @@ public class StudentRepository {
   }
 
   public List<Student> getAllStudents() {
-    return db.getCollection("students").find()
-        .map(StudentMapper::getStudentDocument).into(new ArrayList<>());
+    return db.getCollection("students", Student.class)
+        .find()
+        .map(this::fetchGroups)
+        .into(new ArrayList<>());
   }
 
   public Optional<Student> getStudentById(String id) {
@@ -49,8 +52,14 @@ public class StudentRepository {
 
 
   public void saveStudent(Student student) {
-    db.getCollection("students")
-        .insertOne(StudentMapper.getDocumentFromStudent(student));
+    db.getCollection("students1", Student.class)
+        .insertOne(student);
+  }
+
+  public List<Student> findAll() {
+    return db.getCollection("students1", Student.class)
+        .find()
+        .into(new ArrayList<>());
   }
 
   private static StudentDto toDto(Document doc) {
@@ -67,17 +76,16 @@ public class StudentRepository {
   }
 
   private Optional<Student> findStudentByQuery(Bson query) {
-    return db.getCollection("students")
+    return db.getCollection("students", Student.class)
         .find(query)
-        .map(document -> mapStudentWithGroup(document))
+        .map(this::fetchGroups)
         .into(new ArrayList<>())
         .stream()
         .findAny();
   }
 
-  private Student mapStudentWithGroup(Document document) {
-    Group group = findGroupById(document.getString("group.$id"));
-    Student student = StudentMapper.getStudentDocument(document);
+  private Student fetchGroups(Student student) {
+    Group group = findGroupById(student.getGroupId());
     student.setGroup(group);
     return student;
   }
@@ -92,6 +100,29 @@ public class StudentRepository {
                 groupDoc.getString("curator.lastName")),
             groupDoc.getString("name")
         )).first();
+  }
+
+  public List<Group> getAggregation() {
+    return db.getCollection("students")
+        .aggregate(
+            List.of(
+                Aggregates.match(eq("group_id", "243-1")),
+                Aggregates.lookup("groups", "group.$id", "_id", "groupa"),
+                Aggregates.project(Projections.include("groupa._id", "groupa.curator", "groupa.name")),
+                Aggregates.unwind("$groupa")
+            ))
+        .map(doc -> {
+
+          return Group.builder()
+              ._id(doc.getString("groupa._id"))
+              .name(doc.getString("groupa.name"))
+              .curator(new StudentDto(
+                  doc.getString("groupa.curator.firstName"),
+                  doc.getString("groupa.curator.lastName")))
+              .build();
+
+        })
+        .into(new ArrayList<>());
   }
 
 }
